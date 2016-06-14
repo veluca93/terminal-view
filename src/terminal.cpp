@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <sys/ioctl.h>
+#include <assert.h>
+#include <iostream>
 #ifdef __linux__
 #include <linux/kd.h>
 #endif
@@ -377,7 +379,7 @@ Terminal::Terminal(term_type_t type, term_colors_t colors, dist_algo_t algo): al
         FD_ZERO(&readset);
         FD_SET(fileno(tty), &readset);
         time.tv_sec = 0;
-        time.tv_usec = 100000;
+        time.tv_usec = 1000000;
         if (select(fileno(tty) + 1, &readset, NULL, NULL, &time) == 1) {
             if (fscanf(tty, "\033[4;%d;%dj", &h, &w) != 2)
                 throw std::runtime_error("Cannot get font size!\n");
@@ -409,8 +411,10 @@ Terminal::Terminal(term_type_t type, term_colors_t colors, dist_algo_t algo): al
         break;
     }
     case truecolor:
+        fclose(tty);
         return;
     };
+    fclose(tty);
     for (unsigned i=0; i<temp_palette.size(); i++) {
         color_palette.push_back(temp_palette[i]);
         for (unsigned j=i+1; j<temp_palette.size(); j++) {
@@ -431,18 +435,35 @@ Terminal::Terminal(term_type_t type, term_colors_t colors, dist_algo_t algo): al
     unsigned count = ptr - color_palette.begin();
     while (count > color_palette.size()) color_palette.pop_back();
     approx_cache.resize(256*256*256, -1);
+    switch (colors) {
+    case truecolor: assert(false);
+    case ansi: bucket_width = 64; break;
+    case extended: bucket_width = 16; break;
+    }
+    int bucket_count = 256/bucket_width;
+    buckets.resize(bucket_count*bucket_count*bucket_count);
+    for (unsigned i=0; i<color_palette.size(); i++) {
+        int ar = color_palette[i].r / bucket_width;
+        int ag = color_palette[i].g / bucket_width;
+        int ab = color_palette[i].b / bucket_width;
+        buckets[(ar * bucket_count * bucket_count) | (ag * bucket_count) | ab].push_back(i);
+    }
 }
 
 std::string Terminal::show_palette(int width, int line_width) {
     std::string out;
     width = std::max(width, 1);
     int cpl = std::max(1, line_width/width);
-    for (unsigned i=0; i<color_palette.size(); i++) {
-        if (i % cpl == 0 && i > 0) out += "\033[0m\n";
-        for (int j=0; j<width; j++)
-            out += color_palette[i].cell_string();
+    int i = 0;
+    for (const auto& bucket: buckets) {
+        for (auto cur: bucket) {
+            if (i % cpl == 0 && i > 0) out += "\033[0m\n";
+            for (int j=0; j<width; j++)
+                out += color_palette[cur].cell_string();
+            i++;
+        }
     }
-    out += "\033[0m";
+    out += "\033[0m\n";
     return out;
 }
 
@@ -450,9 +471,40 @@ TermColor Terminal::approximate(unsigned char r, unsigned char g, unsigned char 
     if (colors == truecolor) return TermColor(r, g, b);
     if (approx_cache[(r<<16) | (g<<8) | b] != -1)
         return color_palette[approx_cache[(r<<16) | (g<<8) | b]];
+    std::vector<int> candidates;
+
+
+    int bucket_count = 256/bucket_width;
+    int ar = r / bucket_width;
+    int ag = g / bucket_width;
+    int ab = b / bucket_width;
+    auto add_bkt = [&](int ar, int ag, int ab) {
+        if (ar < 0 || ag < 0 || ab < 0) return;
+        if (ar >= bucket_count || ag >= bucket_count || ab >= bucket_count) return;
+        for (auto x: buckets[(ar * bucket_count * bucket_count) | (ag * bucket_count) | ab])
+        candidates.emplace_back(x);
+    };
+    add_bkt(ar, ag, ab);
+    for (int i=1; i<5; i++) {
+        if (candidates.size() >= 256 && candidates.size() >= color_palette.size()) break;
+        for (int x=0; x<i; x++) {
+            for (int y=0; x+y<i; y++) {
+                int z = i-x-y;
+                add_bkt(ar+x, ag+y, ab+z);
+                add_bkt(ar+x, ag+y, ab-z);
+                add_bkt(ar+x, ag-y, ab+z);
+                add_bkt(ar+x, ag-y, ab-z);
+                add_bkt(ar-x, ag+y, ab+z);
+                add_bkt(ar-x, ag+y, ab-z);
+                add_bkt(ar-x, ag-y, ab+z);
+                add_bkt(ar-x, ag-y, ab-z);
+            }
+        }
+    }
+
     int best = -1;
     double dist = std::numeric_limits<double>::max();
-    for (unsigned i=0; i<color_palette.size(); i++) {
+    for (auto i: candidates) {
         double cdist = color_distance(r, g, b, color_palette[i].r, color_palette[i].g, color_palette[i].b, algo);
         if (cdist < dist) {
             best = i;
@@ -474,4 +526,8 @@ std::string Terminal::move_to(int x, int y) {
 
 std::string Terminal::clear() {
     return "\033[2J\033[1;1H";
+}
+
+std::string Terminal::clear_color() {
+    return "\033[0m";
 }

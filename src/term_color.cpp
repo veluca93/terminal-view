@@ -7,29 +7,6 @@
 #define THREE_QUARTER "\xe2\x96\x93"
 #define FULL_BLOCK    "\xe2\x96\x88"
 
-void TermColor::compute_hsv() {
-    double R = r*1.0/255;
-    double G = g*1.0/255;
-    double B = b*1.0/255;
-    double min = std::min(std::min(R, G), B);
-    double max = std::max(std::max(R, G), B);
-    v = max;
-    if (min == max) {
-        h = s = 0;
-    } else {
-        s = (max-min) / max;
-        double rc  = (max - R) / (max-min);
-        double gc  = (max - G) / (max-min);
-        double bc  = (max - B) / (max-min);
-        if (R == max) h = bc - gc;
-        else if (G == max) h = 2.0 + rc - bc;
-        else h = 4.0 + gc - rc;
-        h /= 6.0;
-        if (h < 0) h += 1;
-        if (h > 1) h += 1;
-    }
-}
-
 std::string TermColor::cell_string() {
     auto block = [](blend_mode_t mode) {
         switch (mode) {

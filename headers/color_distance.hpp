@@ -1,5 +1,5 @@
-#ifndef TV_COLOR_DISTANCE
-#define TV_COLOR_DISTANCE
+#ifndef TV_COLOR_DISTANCE_HPP
+#define TV_COLOR_DISTANCE_HPP
 
 enum dist_algo_t {
     ycgco

@@ -1,6 +1,7 @@
 OBJECTS=$(patsubst src/%.cpp,build/%.o,$(wildcard src/*cpp))
 CXX?=g++
 CXXFLAGS=-O2 -Wall -std=c++14 -Iheaders -ggdb
+LDFLAGS=-lSDL2 -lSDL2_image
 
 .PHONY: all clean
 

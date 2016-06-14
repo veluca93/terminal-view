@@ -3,11 +3,6 @@
 #include <tuple>
 
 class TermColor {
-private:
-    /**
-     *  Compute the hsv values from the rgb ones.
-     */
-    void compute_hsv();
 public:
     /**
      *  Color type.
@@ -52,40 +47,33 @@ public:
     unsigned char r, g, b;
 
     /**
-     *  HSV values for the color.
-     *
-     *  They range from 0 to 1.
-     */
-    double h, s, v;
-
-    /**
      *  Constructors.
      */
     TermColor(
         char id, bool bold,
         unsigned char r, unsigned char g, unsigned char b
     ): type(ansi), ansi_code(id, bold),
-       r(r), g(g), b(b) {compute_hsv();}
+       r(r), g(g), b(b) {}
     TermColor(
         blend_mode_t mode,
         char fid, bool bold, char bid, 
         unsigned char r, unsigned char g, unsigned char b
     ): type(blended_ansi), blended_ansi_code(mode, fid, bold, bid),
-       r(r), g(g), b(b) {compute_hsv();}
+       r(r), g(g), b(b) {}
     TermColor(
         unsigned char id,
         unsigned char r, unsigned char g, unsigned char b
     ): type(extended), extended_code(id),
-       r(r), g(g), b(b) {compute_hsv();}
+       r(r), g(g), b(b) {}
     TermColor(
         blend_mode_t mode, unsigned char fid, unsigned char bid,
         unsigned char r, unsigned char g, unsigned char b
     ): type(blended_extended), blended_extended_code(mode, fid, bid),
-       r(r), g(g), b(b) {compute_hsv();}
+       r(r), g(g), b(b) {}
     TermColor(
         unsigned char r, unsigned char g, unsigned char b
     ): type(truecolor),
-       r(r), g(g), b(b) {compute_hsv();}
+       r(r), g(g), b(b) {}
 
     /**
      *  String that prints a cell with this color.
@@ -111,9 +99,6 @@ public:
         r = other.r;
         g = other.g;
         b = other.b;
-        h = other.h;
-        s = other.s;
-        v = other.v;
         switch (type) {
         case ansi: ansi_code = other.ansi_code; break;
         case blended_ansi: blended_ansi_code = other.blended_ansi_code; break;
@@ -128,11 +113,11 @@ public:
      *  Comparison operators
      */
     bool operator<(const TermColor& other) const {
-        if (s > other.s) return true;
-        if (s < other.s) return false;
-        if (v > other.v) return true;
-        if (v < other.v) return false;
-        return h < other.h;
+        if (r > other.r) return true;
+        if (r < other.r) return false;
+        if (g > other.g) return true;
+        if (g < other.g) return false;
+        return b < other.b;
     }
     bool operator==(const TermColor& other) const {
         return !((*this < other) || (other < *this));

@@ -3,6 +3,7 @@
 #include "term_color.hpp"
 #include "color_distance.hpp"
 #include <vector>
+#include <map>
 
 class Terminal {
     /**
@@ -17,6 +18,12 @@ class Terminal {
      *  Color palette for non-truecolor terminals.
      */
     std::vector<TermColor> color_palette;
+
+    /**
+     *  Buckets that contain the indexes of similar colors in the palette.
+     */
+    std::vector<std::vector<int>> buckets;
+    unsigned bucket_width;
 
     /**
      *  Array of cached approximations of colors with the palette.
@@ -78,6 +85,11 @@ public:
      *  Returns a string that clears the terminal screen.
      */
     std::string clear();
+
+    /**
+     *  Returns a string that clears the current terminal color.
+     */
+    std::string clear_color();
 };
 
 #endif
