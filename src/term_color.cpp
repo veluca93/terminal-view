@@ -1,49 +1,87 @@
 #include "term_color.hpp"
 #include <math.h>
+#include <assert.h>
 #define EMPTY_BLOCK   " "
 #define ONE_QUARTER   "\xe2\x96\x91"
 #define ONE_HALF      "\xe2\x96\x92"
 #define THREE_QUARTER "\xe2\x96\x93"
 #define FULL_BLOCK    "\xe2\x96\x88"
 
-void TermColor::print() {
+void TermColor::compute_hsv() {
+    double R = r*1.0/255;
+    double G = g*1.0/255;
+    double B = b*1.0/255;
+    double min = std::min(std::min(R, G), B);
+    double max = std::max(std::max(R, G), B);
+    v = max;
+    if (min == max) {
+        h = s = 0;
+    } else {
+        s = (max-min) / max;
+        double rc  = (max - R) / (max-min);
+        double gc  = (max - G) / (max-min);
+        double bc  = (max - B) / (max-min);
+        if (R == max) h = bc - gc;
+        else if (G == max) h = 2.0 + rc - bc;
+        else h = 4.0 + gc - rc;
+        h /= 6.0;
+        if (h < 0) h += 1;
+        if (h > 1) h += 1;
+    }
+}
+
+std::string TermColor::cell_string() {
+    auto block = [](blend_mode_t mode) {
+        switch (mode) {
+        case empty: return EMPTY_BLOCK;
+        case one_quarter: return ONE_QUARTER;
+        case one_half: return ONE_HALF;
+        case three_quarter: return THREE_QUARTER;
+        case full: return FULL_BLOCK;
+        }
+        assert(false);
+    };
+    std::string out;
     switch (type) {
     case ansi:
-        printf("\033[0m\033[3%d", std::get<0>(ansi_code));
-        if (std::get<1>(ansi_code)) printf(";1");
-        printf("m" FULL_BLOCK);
+        out += "\033[0m\033[3";
+        out += std::to_string(std::get<0>(ansi_code));
+        if (std::get<1>(ansi_code)) out += ";1";
+        out += "m" FULL_BLOCK;
         break;
     case blended_ansi:
-        printf("\033[0m\033[3%d", std::get<1>(blended_ansi_code));
-        printf(";4%d", std::get<3>(blended_ansi_code));
-        if (std::get<2>(blended_ansi_code)) printf(";1");
-        printf("m");
-        switch (std::get<0>(blended_ansi_code)) {
-        case empty: printf(EMPTY_BLOCK); break;
-        case one_quarter: printf(ONE_QUARTER); break;
-        case one_half: printf(ONE_HALF); break;
-        case three_quarter: printf(THREE_QUARTER); break;
-        case full: printf(FULL_BLOCK); break;
-        }
+        out += "\033[0m\033[3";
+        out += std::to_string(std::get<1>(blended_ansi_code));
+        out += ";4";
+        out += std::to_string(std::get<3>(blended_ansi_code));
+        if (std::get<2>(blended_ansi_code)) out += ";1";
+        out += "m";
+        out += block(std::get<0>(blended_ansi_code));
         break;
     case extended:
-        printf("\033[38;5;%dm" FULL_BLOCK, std::get<0>(extended_code));
+        out += "\033[38;5;";
+        out += std::to_string(std::get<0>(extended_code));
+        out += "m" FULL_BLOCK;
         break;
     case blended_extended:
-        printf("\033[38;5;%dm", std::get<1>(blended_extended_code));
-        printf("\033[48;5;%dm", std::get<2>(blended_extended_code));
-        switch (std::get<0>(blended_extended_code)) {
-        case empty: printf(EMPTY_BLOCK); break;
-        case one_quarter: printf(ONE_QUARTER); break;
-        case one_half: printf(ONE_HALF); break;
-        case three_quarter: printf(THREE_QUARTER); break;
-        case full: printf(FULL_BLOCK); break;
-        }
+        out += "\033[38;5;";
+        out += std::to_string(std::get<1>(blended_extended_code));
+        out += "m\033[48;5;";
+        out += std::to_string(std::get<2>(blended_extended_code));
+        out += "m";
+        out += block(std::get<0>(blended_extended_code));
         break;
     case truecolor:
-        printf("\03338;2;%d;%d;%dm" FULL_BLOCK, r, g, b);
+        out += "\033[38;2;";
+        out += std::to_string(r);
+        out += ";";
+        out += std::to_string(g);
+        out += ";";
+        out += std::to_string(b);
+        out += "m" FULL_BLOCK;
         break;
     }
+    return out;
 }
 
 TermColor TermColor::blend(blend_mode_t mode, const TermColor& other) {

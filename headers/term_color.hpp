@@ -2,7 +2,13 @@
 #define TV_TERM_COLOR_HPP
 #include <tuple>
 
-struct TermColor {
+class TermColor {
+private:
+    /**
+     *  Compute the hsv values from the rgb ones.
+     */
+    void compute_hsv();
+public:
     /**
      *  Color type.
      *
@@ -46,38 +52,45 @@ struct TermColor {
     unsigned char r, g, b;
 
     /**
+     *  HSV values for the color.
+     *
+     *  They range from 0 to 1.
+     */
+    double h, s, v;
+
+    /**
      *  Constructors.
      */
     TermColor(
         char id, bool bold,
         unsigned char r, unsigned char g, unsigned char b
     ): type(ansi), ansi_code(id, bold),
-       r(r), g(g), b(b) {}
+       r(r), g(g), b(b) {compute_hsv();}
     TermColor(
         blend_mode_t mode,
         char fid, bool bold, char bid, 
         unsigned char r, unsigned char g, unsigned char b
     ): type(blended_ansi), blended_ansi_code(mode, fid, bold, bid),
-       r(r), g(g), b(b) {}
+       r(r), g(g), b(b) {compute_hsv();}
     TermColor(
         unsigned char id,
         unsigned char r, unsigned char g, unsigned char b
     ): type(extended), extended_code(id),
-       r(r), g(g), b(b) {}
+       r(r), g(g), b(b) {compute_hsv();}
     TermColor(
         blend_mode_t mode, unsigned char fid, unsigned char bid,
         unsigned char r, unsigned char g, unsigned char b
     ): type(blended_extended), blended_extended_code(mode, fid, bid),
-       r(r), g(g), b(b) {}
+       r(r), g(g), b(b) {compute_hsv();}
     TermColor(
         unsigned char r, unsigned char g, unsigned char b
     ): type(truecolor),
-       r(r), g(g), b(b) {}
+       r(r), g(g), b(b) {compute_hsv();}
 
     /**
-     *  Print a cell with this color.
+     *  String that prints a cell with this color.
      */
-    void print();
+    std::string cell_string();
 
     /**
      *  Returns true if this color can be used as a background in a blending.
@@ -89,6 +102,44 @@ struct TermColor {
      *  Works only for ANSI and extended colors.
      */
     TermColor blend(blend_mode_t mode, const TermColor& other);
+
+    /**
+     *  Assignment operator
+     */
+    TermColor& operator=(const TermColor& other) {
+        type = other.type;
+        r = other.r;
+        g = other.g;
+        b = other.b;
+        h = other.h;
+        s = other.s;
+        v = other.v;
+        switch (type) {
+        case ansi: ansi_code = other.ansi_code; break;
+        case blended_ansi: blended_ansi_code = other.blended_ansi_code; break;
+        case extended: extended_code = other.extended_code; break;
+        case blended_extended: blended_extended_code = other.blended_extended_code; break;
+        default: break;
+        }
+        return *this;
+    }
+
+    /**
+     *  Comparison operators
+     */
+    bool operator<(const TermColor& other) const {
+        if (s > other.s) return true;
+        if (s < other.s) return false;
+        if (v > other.v) return true;
+        if (v < other.v) return false;
+        return h < other.h;
+    }
+    bool operator==(const TermColor& other) const {
+        return !((*this < other) || (other < *this));
+    }
+    bool operator!=(const TermColor& other) const {
+        return !(*this == other);
+    }
 };
 
 #endif
