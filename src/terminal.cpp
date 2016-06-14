@@ -4,6 +4,10 @@
 #include <sys/select.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <sys/ioctl.h>
+#ifdef __linux__
+#include <linux/kd.h>
+#endif
 
 std::array<unsigned char, 3> console_colors[] = {
     {0x00, 0x00, 0x00},
@@ -298,6 +302,9 @@ std::vector<std::array<unsigned char, 3>> Terminal::get_colors_rgb(int start, in
         b = std::stoi(b_buf, 0, 16);
         return std::array<unsigned char, 3>{r, g, b};
     };
+    FILE* tty = fopen("/dev/tty", "r+");
+    if (tty == NULL)
+        throw std::runtime_error("This process has no controlling terminal!\n");
     int fd = fileno(tty);
     fd_set readset;
     struct timeval time;
@@ -326,9 +333,64 @@ std::vector<std::array<unsigned char, 3>> Terminal::get_colors_rgb(int start, in
     return res;
 }
 
-Terminal::Terminal(term_type_t type, term_colors_t colors): type(type), colors(colors) {
-    tty = fopen("/dev/tty", "r+");
-    if (tty == NULL) throw std::runtime_error("This process has no controlling terminal!\n");
+Terminal::Terminal(term_type_t type, term_colors_t colors, dist_algo_t algo): algo(algo), type(type), colors(colors) {
+    FILE* tty = fopen("/dev/tty", "r+");
+    if (tty == NULL)
+        throw std::runtime_error("This process has no controlling terminal!\n");
+
+    // Detect terminal width and height
+    struct winsize ts;
+    if (ioctl(fileno(tty), TIOCGWINSZ, &ts) == -1)
+        throw std::runtime_error("Could not get terminal size!\n");
+    width = ts.ws_col;
+    height = ts.ws_row;
+
+    // Detect character size
+    switch (type) {
+    case console: {
+        cwidth = 8;
+#ifdef __linux__
+        char empty[512*32*8];
+        struct consolefontdesc font;
+        font.charcount = sizeof(empty)/(32*8);
+        font.chardata = empty;
+        if (ioctl(fileno(tty), GIO_FONTX, &font) == -1)
+            throw std::runtime_error("Cannot get font size!\n");
+        cheight = font.charheight;
+#else
+        cheight = 16;
+#endif
+        break;
+    }
+    case xterm: {
+        int w, h;
+        fd_set readset;
+        struct timeval time;
+        struct termios term, initial_term;
+        tcgetattr(fileno(tty), &initial_term);
+        term = initial_term;
+        term.c_lflag &=~ICANON;
+        term.c_lflag &=~ECHO;
+        tcsetattr(fileno(tty), TCSANOW, &term);
+        fprintf(tty, "\033[14t");
+        fflush(tty);
+        FD_ZERO(&readset);
+        FD_SET(fileno(tty), &readset);
+        time.tv_sec = 0;
+        time.tv_usec = 100000;
+        if (select(fileno(tty) + 1, &readset, NULL, NULL, &time) == 1) {
+            if (fscanf(tty, "\033[4;%d;%dj", &h, &w) != 2)
+                throw std::runtime_error("Cannot get font size!\n");
+        } else {
+            throw std::runtime_error("Cannot get font size!\n");
+        }
+        tcsetattr(fileno(tty), TCSADRAIN, &initial_term);
+        cwidth = w / width;
+        cheight = h / height;
+        break;
+    }};
+
+    // Populate the palette, if needed.
     std::vector<TermColor> temp_palette;
     switch (colors) {
     case ansi: {
@@ -347,7 +409,7 @@ Terminal::Terminal(term_type_t type, term_colors_t colors): type(type), colors(c
         break;
     }
     case truecolor:
-        break;
+        return;
     };
     for (unsigned i=0; i<temp_palette.size(); i++) {
         color_palette.push_back(temp_palette[i]);
@@ -368,9 +430,10 @@ Terminal::Terminal(term_type_t type, term_colors_t colors): type(type), colors(c
     auto ptr = std::unique(color_palette.begin(), color_palette.end());
     unsigned count = ptr - color_palette.begin();
     while (count > color_palette.size()) color_palette.pop_back();
+    approx_cache.resize(256*256*256, -1);
 }
 
-void Terminal::print_palette(int width, int line_width) {
+std::string Terminal::show_palette(int width, int line_width) {
     std::string out;
     width = std::max(width, 1);
     int cpl = std::max(1, line_width/width);
@@ -380,5 +443,35 @@ void Terminal::print_palette(int width, int line_width) {
             out += color_palette[i].cell_string();
     }
     out += "\033[0m";
-    puts(out.c_str());
+    return out;
+}
+
+TermColor Terminal::approximate(unsigned char r, unsigned char g, unsigned char b) {
+    if (colors == truecolor) return TermColor(r, g, b);
+    if (approx_cache[(r<<16) | (g<<8) | b] != -1)
+        return color_palette[approx_cache[(r<<16) | (g<<8) | b]];
+    int best = -1;
+    double dist = std::numeric_limits<double>::max();
+    for (unsigned i=0; i<color_palette.size(); i++) {
+        double cdist = color_distance(r, g, b, color_palette[i].r, color_palette[i].g, color_palette[i].b, algo);
+        if (cdist < dist) {
+            best = i;
+            dist = cdist;
+        }
+    }
+    approx_cache[(r<<16) | (g<<8) | b] = best;
+    return color_palette[best];
+}
+
+std::string Terminal::move_to(int x, int y) {
+    std::string ret = "\033[";
+    ret += std::to_string(y);
+    ret += ";";
+    ret += std::to_string(x);
+    ret += "H";
+    return ret;
+}
+
+std::string Terminal::clear() {
+    return "\033[2J\033[1;1H";
 }

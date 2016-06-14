@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <vector>
+#include <iostream>
 
 Terminal::term_type_t detect_term_type() {
     char* TERM = getenv("TERM");
@@ -71,5 +72,8 @@ int main(int argc, char** argv) {
     if (!found_term_type) type = detect_term_type();
     if (!found_term_colors) colors = detect_term_colors();
     Terminal term(type, colors);
-    term.print_palette(2, 100);
+    std::cout << term.clear();
+    std::cout << term.show_palette(2, 100);
+    std::cout << term.move_to(10, 10);
+    puts(term.approximate(50, 12, 200).cell_string().c_str());
 }
