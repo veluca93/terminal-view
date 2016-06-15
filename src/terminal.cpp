@@ -323,7 +323,7 @@ std::vector<std::array<unsigned char, 3>> Terminal::get_colors_rgb(int start, in
     FD_ZERO(&readset);
     FD_SET(fd, &readset);
     time.tv_sec = 0;
-    time.tv_usec = 100000;
+    time.tv_usec = 1000000;
     if (select(fd + 1, &readset, NULL, NULL, &time) == 1) {
         for (int i=start; i<end; i++) {
             res.emplace_back(read_color(tty, i));

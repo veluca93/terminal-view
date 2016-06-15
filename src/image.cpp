@@ -33,15 +33,15 @@ Image::Image(const std::string& file) {
 }
 
 void Image::downscale(size_t w, size_t h, size_t pixel_width, size_t pixel_height) {
-    double ppc_row = std::max(width/double(pixel_width*w), height/double(pixel_height*height))*pixel_height;
+    double ppc_row = std::max(width/double(pixel_width*w), height/double(pixel_height*h))*pixel_height;
     double ppc_column = ppc_row*pixel_width/pixel_height;
     if (ppc_row < 1 || ppc_column < 1) return;
     std::vector<char> img_data;
-    unsigned x = 0;
-    unsigned y = 0;
-    for (y=0; y<h; y++) {
+    unsigned new_width = 0;
+    for (unsigned y=0; y<h; y++) {
         if (ceil(y*ppc_row) > height) break;
-        for (x=0; x<w; x++) {
+        new_width = 0;
+        for (unsigned x=0; x<w; x++) {
             int red_sum = 0;
             int green_sum = 0;
             int blue_sum = 0;
@@ -62,9 +62,10 @@ void Image::downscale(size_t w, size_t h, size_t pixel_width, size_t pixel_heigh
             img_data.push_back(red_sum);
             img_data.push_back(green_sum);
             img_data.push_back(blue_sum);
+            new_width++;
         }
     }
     img = img_data;
-    width = x;
-    height = y;
+    width = new_width;
+    height = img.size()/(3*new_width);
 }
