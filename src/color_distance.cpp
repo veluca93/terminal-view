@@ -15,8 +15,10 @@ static double ycgco_distance(int r1, int g1, int b1, int r2, int g2, int b2) {
     double y_diff = std::get<0>(first) - std::get<0>(second);
     double cg_diff = std::get<1>(first) - std::get<1>(second);
     double co_diff = std::get<2>(first) - std::get<2>(second);
-    double dist = std::get<2>(second)*std::get<2>(second) + std::get<1>(second)*std::get<1>(second);
     double mult = 1;
+    double dist = std::get<2>(second)*std::get<2>(second) + std::get<1>(second)*std::get<1>(second);
+    if (dist < 100) mult = 4;
+    dist = std::get<2>(first)*std::get<2>(first) + std::get<1>(first)*std::get<1>(first);
     if (dist < 100) mult = 4;
     return y_diff*y_diff + mult*(cg_diff*cg_diff + co_diff*co_diff);
 }
